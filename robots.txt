@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://protfolio-sunil-kulali.vercel.app/sitemap.xml

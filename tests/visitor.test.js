@@ -1,0 +1,12 @@
+const test=require("node:test"),assert=require("node:assert");
+const handler=require("../api/visitor.js"),{validate}=handler;
+const mk=body=>{const r={status:0,json:null};return[{method:"POST",headers:{"x-forwarded-for":String(Math.random())},body},{status(c){r.status=c;return this},json(j){r.json=j;return this}},r]};
+test("rejects missing consent",()=>assert.ok(validate({name:"A",consent:false}).error));
+test("rejects empty name",()=>assert.ok(validate({name:"  ",consent:true}).error));
+test("rejects unknown type",()=>assert.ok(validate({name:"A",type:"Hacker",consent:true}).error));
+test("strips newlines (header injection)",()=>assert.equal(validate({name:"A\r\nBcc: x",consent:true}).value.name,"A Bcc: x"));
+test("limits length",()=>assert.equal(validate({name:"a".repeat(500),consent:true}).value.name.length,80));
+test("503 when email not configured",async()=>{delete process.env.RESEND_API_KEY;const[q,s,r]=mk({name:"A",consent:true});await handler(q,s);assert.equal(r.status,503)});
+test("200 only after provider accepts",async()=>{Object.assign(process.env,{RESEND_API_KEY:"k",RESEND_FROM:"a@b.c",NOTIFY_TO:"x@y.z"});
+ global.fetch=async()=>({ok:true});let[q,s,r]=mk({name:"A",type:"Student",consent:true});await handler(q,s);assert.equal(r.status,200);
+ global.fetch=async()=>({ok:false});[q,s,r]=mk({name:"A",consent:true});await handler(q,s);assert.equal(r.status,502)});

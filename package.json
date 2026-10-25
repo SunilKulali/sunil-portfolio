@@ -1,0 +1,11 @@
+{
+  "name": "sunil-kulali-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx vercel dev --listen 8000",
+    "preview": "npx serve .",
+    "test": "node --test tests/visitor.test.js tests/feedback.test.js tests/chat.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
