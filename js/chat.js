@@ -53,7 +53,7 @@ async function ask(text,retry){
   }catch(x){}finally{clearTimeout(t)}
  typ.remove();busy=false;
  if(data&&data.ok&&data.reply){msgs.push({role:"user",content:text},{role:"assistant",content:data.reply});reply(data)}
- else{const m=code==="missing_api_key"?"The assistant is not configured yet. Please try again later.":code==="provider_authentication"?"The AI service needs a configuration update. Please try again later.":code==="provider_billing"?"The AI service is temporarily unavailable. Please try again later.":status===429?"Too many questions right now. Please wait a minute and try again.":status===503?"The assistant is unavailable right now. Please try again later.":"I could not get a response right now.";
+ else{const m=code==="missing_api_key"?"The assistant is not configured yet. Please try again later.":code==="provider_authentication"?"The AI service needs a configuration update. Please try again later.":code==="provider_billing"?"The AI service needs billing attention. Please try again later.":code==="provider_model"?"The AI model configuration needs attention. Please try again later.":code==="provider_overloaded"?"The AI service is busy. Please try again shortly.":code==="provider_timeout"?"The AI service took too long to respond. Please try again.":status===429?"Too many questions right now. Please wait a minute and try again.":status===503?"The assistant is unavailable right now. Please try again later.":"I could not get a response right now.";
   const d=bubble("a err",esc(m)+' You can also reach Sunil through the <a href="#contact">contact section</a>.<br><button type="button">Retry</button>');
   d.querySelector("button").onclick=()=>{d.remove();ask(text,true)}}
  sync()}

@@ -49,7 +49,7 @@ async function handler(req,res){
   try{body=typeof req.body==="string"?JSON.parse(req.body):req.body}catch{return fail(res,400,"Invalid JSON request","invalid_json")}
   const v=validate(body);if(v.error)return fail(res,400,v.error,"invalid_request");
   const key=process.env.ANTHROPIC_API_KEY?.trim();
-  if(!key)return fail(res,503,"Assistant not configured","missing_api_key");
+  if(!key){logFailure("missing_configuration",{missing:["ANTHROPIC_API_KEY"]});return fail(res,503,"Assistant not configured","missing_api_key")}
   const model=process.env.CHAT_MODEL?.trim()||"claude-haiku-5-5";
   const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),20000);
   try{
@@ -57,13 +57,15 @@ async function handler(req,res){
       headers:{"x-api-key":key,"anthropic-version":"2023-06-01","content-type":"application/json"},
       body:JSON.stringify({model,max_tokens:600,system:SYSTEM,messages:normalize(v.value.history,v.value.message)})});
     if(!r.ok){
-      let providerType="unknown",billingIssue=false;
+      let providerType="unknown",billingIssue=false,modelIssue=false;
       try{const e=await r.json();const type=e?.error?.type,message=e?.error?.message;
         if(typeof type==="string"&&/^[a-z0-9_-]{1,64}$/i.test(type))providerType=type;
-        billingIssue=typeof message==="string"&&/credit balance.{0,40}(too low|insufficient)|purchase.{0,40}credits/i.test(message)
+        billingIssue=typeof message==="string"&&/credit balance.{0,40}(too low|insufficient)|purchase.{0,40}credits/i.test(message);
+        modelIssue=r.status===404||type==="not_found_error"||(type==="invalid_request_error"&&typeof message==="string"&&/model.{0,60}(not found|invalid|unsupported|does not exist)|(?:not found|unsupported).{0,60}model/i.test(message))
       }catch{}
       logFailure(billingIssue?"billing_insufficient_credits":"http_error",{status:r.status,providerType});
       if(billingIssue)return fail(res,503,"AI service billing needs attention","provider_billing");
+      if(modelIssue)return fail(res,503,"AI service model configuration needs attention","provider_model");
       if(r.status===401||r.status===403)return fail(res,503,"AI service authentication needs attention","provider_authentication");
       if(r.status===402)return fail(res,503,"AI service billing needs attention","provider_billing");
       if(r.status===429)return fail(res,429,"AI service is busy; try again shortly","provider_rate_limit");

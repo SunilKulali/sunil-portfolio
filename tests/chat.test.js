@@ -1,4 +1,5 @@
 const test=require("node:test"),assert=require("node:assert");
+const fs=require("node:fs");
 const handler=require("../api/chat.js"),{validate,normalize,sources,SYSTEM}=handler;
 const mk=(body,h={})=>{const r={status:0,json:null};return[{method:"POST",headers:{"x-forwarded-for":String(Math.random()),host:"site.test",...h},body},{status(c){r.status=c;return this},json(j){r.json=j;return this}},r]};
 const ok=t=>async()=>({ok:true,json:async()=>({content:[{type:"text",text:t}]})});
@@ -20,7 +21,8 @@ test("405 for GET, 403 for foreign origin, 413 oversized",async()=>{
  [q,s,r]=mk({message:"hi"},{origin:"https://evil.example"});await handler(q,s);assert.equal(r.status,403);
  [q,s,r]=mk({message:"hi"},{"content-length":"99999"});await handler(q,s);assert.equal(r.status,413)});
 test("400 for invalid body",async()=>{process.env.ANTHROPIC_API_KEY="k";const[q,s,r]=mk({message:""});await handler(q,s);assert.equal(r.status,400)});
-test("503 when API key missing",async()=>{delete process.env.ANTHROPIC_API_KEY;const[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,503)});
+test("503 and safe diagnostic when API key missing",async()=>{delete process.env.ANTHROPIC_API_KEY;const logs=[],old=console.error;console.error=(...args)=>logs.push(args);
+ try{const[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,503);assert.equal(r.json.code,"missing_api_key");assert.ok(JSON.stringify(logs).includes("ANTHROPIC_API_KEY"));assert.ok(!JSON.stringify(logs).includes("sk-"))}finally{console.error=old}});
 test("returns the model reply with sources and never leaks the key",async()=>{
  process.env.ANTHROPIC_API_KEY="sk-secret-123";process.env.CHAT_MODEL="test-model";let sent;
  global.fetch=async(u,o)=>{sent={u,o,b:JSON.parse(o.body)};return ok("InsightOS is an AI BI platform. See [repo](https://github.com/SunilKulali/plusedataai)")()};
@@ -42,8 +44,20 @@ test("maps Anthropic insufficient-credit errors to a billing configuration respo
  const logs=[],old=console.error;console.error=(...args)=>logs.push(args);
  try{const[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,503);assert.equal(r.json.code,"provider_billing");assert.ok(!JSON.stringify(logs).includes("credit balance"));assert.ok(!JSON.stringify(logs).includes("sk-never-log-this"))}finally{console.error=old}
 });
-test("502 on provider error and on empty reply",async()=>{
+test("maps invalid model errors to a safe model-configuration code",async()=>{
+ process.env.ANTHROPIC_API_KEY="sk-never-log-this";
+ global.fetch=async()=>({ok:false,status:404,json:async()=>({error:{type:"not_found_error",message:"model identifier not found"}})});
+ const logs=[],old=console.error;console.error=(...args)=>logs.push(args);
+ try{const[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,503);assert.equal(r.json.code,"provider_model");assert.ok(!JSON.stringify(logs).includes("model identifier"));assert.ok(!JSON.stringify(logs).includes("sk-never-log-this"))}finally{console.error=old}
+});
+test("frontend shows distinct safe provider error categories",()=>{
+ const source=fs.readFileSync(require.resolve("../js/chat.js"),"utf8");
+ for(const code of["provider_billing","provider_model","provider_authentication","provider_timeout"])assert.ok(source.includes(code));
+ assert.match(source,/AI service needs billing attention/);
+});
+test("502 on provider error, malformed JSON, and empty reply",async()=>{
  process.env.ANTHROPIC_API_KEY="k";global.fetch=async()=>({ok:false,status:500,json:async()=>({error:{type:"api_error"}})});let[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,502);
+ global.fetch=async()=>({ok:true,json:async()=>{throw new SyntaxError("invalid JSON")}});[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,502);assert.equal(r.json.code,"invalid_provider_response");
  global.fetch=ok("   ");[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,502)});
 test("504 on timeout",async()=>{process.env.ANTHROPIC_API_KEY="k";global.fetch=async()=>{const e=new Error("x");e.name="AbortError";throw e};
  const[q,s,r]=mk({message:"hi"});await handler(q,s);assert.equal(r.status,504)});
