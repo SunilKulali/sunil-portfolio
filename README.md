@@ -55,12 +55,12 @@ Push to GitHub and import the repo in Vercel (no build step, framework "Other").
 - Project art is original SVG, not AI-generated images.
 
 ## Feedback feature
-Floating button (bottom-right) and footer link open a modal: name, email (any provider), category chips, optional 1 to 5 stars, message (10 to 2,000 chars), optional follow-up consent.
-- `POST /api/feedback` validates everything server-side, then emails sskulali3@gmail.com through Resend. Visitors see success only after Resend accepts the message. `reply_to` is the visitor's email, so you can reply from Gmail.
+Floating button (bottom-right) and footer link open a modal: name, email (any provider), category chips, optional 1 to 5 stars, required feedback text (no minimum, up to 2,000 characters), optional follow-up consent.
+- `POST /api/feedback` validates everything server-side, then emails sskulali3@gmail.com through Resend. Visitors see success only after Resend accepts the email for delivery; feedback is emailed and is not stored in a database. `reply_to` is the visitor's email, so you can reply from Gmail.
 - Protections: origin check (same host or `ALLOWED_ORIGINS`), 10 KB body limit, 3 submissions per 10 minutes per IP, honeypot field, duplicate-submission key, escaped HTML, newline stripping.
 - No database and no message logging. Feedback lives only in your inbox; delete emails per your retention policy.
-- Uses the same three required env vars as the welcome form (`RESEND_API_KEY`, `RESEND_FROM`, `NOTIFY_TO`). Optional: `ALLOWED_ORIGINS`, `SITE_URL`.
-- Tests: `npm test` (32 tests covering validation, escaping, errors, retry, duplicates, rate limit). Real email delivery is not covered until you configure Resend and send a test from the deployed site.
+- Uses three required Vercel environment variables: `RESEND_API_KEY`, `RESEND_FROM` (a sender/domain verified in Resend), and `NOTIFY_TO`. Optional: `ALLOWED_ORIGINS`, `SITE_URL`. Resend request failures log only safe status/code diagnostics; no feedback body, address, or credentials are logged. Retries use Resend idempotency keys.
+- Tests: `npm test` covers validation, escaping, provider errors, retries, duplicates, and rate limits. Real email delivery is not covered until you configure Resend and send a test from the deployed site.
 
 ## Sunil AI Assistant (chatbot)
 Launcher above the feedback button; panel with welcome cards, Recruiter mode, markdown answers, source links, copy, optional listen (text-to-speech) and optional dictation (mic only starts when pressed).
